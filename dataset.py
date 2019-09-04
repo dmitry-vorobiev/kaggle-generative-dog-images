@@ -3,7 +3,7 @@ import os
 import cv2
 import numpy as np
 from functools import partial
-from numba import jit, njit
+from numba import jit
 from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import datasets
