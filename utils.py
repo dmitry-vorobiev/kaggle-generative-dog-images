@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import torchvision
 from argparse import ArgumentParser
 
 
@@ -229,6 +230,9 @@ def prepare_parser():
         '--data_root', type=str, default='data',
         help='Default location where data is stored (default: %(default)s)')
     parser.add_argument(
+        '--label_root', type=str, default='labels',
+        help='Default location where annotations is stored (default: %(default)s)')
+    parser.add_argument(
         '--weights_root', type=str, default='weights',
         help='Default location to store weights (default: %(default)s)')
     parser.add_argument(
@@ -390,25 +394,66 @@ def denorm(x):
     return out.clamp_(0, 1)
 
 
-def plot_imgs(imgs, cols=8, size=4):
-    n = imgs.shape[0]
-    rows = n // cols
-    _, axes = plt.subplots(figsize=(cols * size, rows * size), ncols=cols, nrows=rows)
-    for i, ax in enumerate(axes.flatten()):
-        img = denorm(imgs[i]).numpy().transpose(1, 2, 0)
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
-        ax.imshow(img)
-    plt.subplots_adjust(wspace=0.0, hspace=0.0)
-    plt.show()
+# Function to join strings or ignore them
+# Base string is the string to link "strings," while strings
+# is a list of strings or Nones.
+def join_strings(base_string, strings):
+    return base_string.join([item for item in strings if item])
 
 
-def save_and_sample(G, G_ema, fixed_z, fixed_y, config):
-    which_G = G_ema if config['ema'] and config['use_ema'] else G
-    with torch.no_grad():
-        fixed_Gz = which_G(fixed_z, which_G.shared(fixed_y))
-        sample_images = fixed_Gz.float().cpu()
-        plot_imgs(sample_images, size=2)
+# Save a model's weights, optimizer, and the state_dict
+def save_weights(G, D, state_dict, weights_root, experiment_name, name_suffix=None, G_ema=None):
+    root = '/'.join([weights_root, experiment_name])
+    if not os.path.exists(root):
+        os.mkdir(root)
+    if name_suffix:
+        print('Saving weights to %s/%s...' % (root, name_suffix))
+    else:
+        print('Saving weights to %s...' % root)
+    torch.save(G.state_dict(),
+               '%s/%s.pth' % (root, join_strings('_', ['G', name_suffix])))
+    torch.save(G.optim.state_dict(),
+               '%s/%s.pth' % (root, join_strings('_', ['G_optim', name_suffix])))
+    torch.save(D.state_dict(),
+               '%s/%s.pth' % (root, join_strings('_', ['D', name_suffix])))
+    torch.save(D.optim.state_dict(),
+               '%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix])))
+    torch.save(state_dict,
+               '%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])))
+    if G_ema is not None:
+        torch.save(G_ema.state_dict(),
+                   '%s/%s.pth' % (root, join_strings('_', ['G_ema', name_suffix])))
+
+
+# Load a model's weights, optimizer, and the state_dict
+def load_weights(G, D, state_dict, weights_root, experiment_name,
+                 name_suffix=None, G_ema=None, strict=True, load_optim=True):
+    root = '/'.join([weights_root, experiment_name])
+    if name_suffix:
+        print('Loading %s weights from %s...' % (name_suffix, root))
+    else:
+        print('Loading weights from %s...' % root)
+    if G is not None:
+        G.load_state_dict(
+            torch.load('%s/%s.pth' % (root, join_strings('_', ['G', name_suffix]))),
+            strict=strict)
+        if load_optim:
+            G.optim.load_state_dict(
+                torch.load('%s/%s.pth' % (root, join_strings('_', ['G_optim', name_suffix]))))
+    if D is not None:
+        D.load_state_dict(
+            torch.load('%s/%s.pth' % (root, join_strings('_', ['D', name_suffix]))),
+            strict=strict)
+        if load_optim:
+            D.optim.load_state_dict(
+                torch.load('%s/%s.pth' % (root, join_strings('_', ['D_optim', name_suffix]))))
+    # Load state dict
+    for item in state_dict:
+        state_dict[item] = torch.load('%s/%s.pth' % (root, join_strings('_', ['state_dict', name_suffix])))[item]
+    if G_ema is not None:
+        G_ema.load_state_dict(
+            torch.load('%s/%s.pth' % (root, join_strings('_', ['G_ema', name_suffix]))),
+            strict=strict)
 
 
 # Utility file to seed rngs
@@ -549,3 +594,86 @@ def prepare_z_y(G_batch_size, dim_z, nclasses, device='cuda', fp16=False, z_var=
     y_.init_distribution('categorical', num_categories=nclasses)
     y_ = y_.to(device, torch.int64)
     return z_, y_
+
+
+# Sample function for sample sheets
+def sample_sheet(G, classes_per_sheet, num_classes, samples_per_class, parallel,
+                 samples_root, experiment_name, folder_number, z_=None):
+    # Prepare sample directory
+    if not os.path.isdir('%s/%s' % (samples_root, experiment_name)):
+        os.mkdir('%s/%s' % (samples_root, experiment_name))
+    if not os.path.isdir('%s/%s/%d' % (samples_root, experiment_name, folder_number)):
+        os.mkdir('%s/%s/%d' % (samples_root, experiment_name, folder_number))
+    # loop over total number of sheets
+    for i in range(num_classes // classes_per_sheet):
+        ims = []
+        y = torch.arange(i * classes_per_sheet, (i + 1) * classes_per_sheet, device='cuda')
+        for j in range(samples_per_class):
+            if (z_ is not None) and hasattr(z_, 'sample_') and classes_per_sheet <= z_.size(0):
+                z_.sample_()
+            else:
+                z_ = torch.randn(classes_per_sheet, G.dim_z, device='cuda')
+            with torch.no_grad():
+                if parallel:
+                    o = nn.parallel.data_parallel(G, (z_[:classes_per_sheet], G.shared(y)))
+                else:
+                    o = G(z_[:classes_per_sheet], G.shared(y))
+
+            ims += [o.data.cpu()]
+        # This line should properly unroll the images
+        out_ims = torch.stack(ims, 1).view(-1, ims[0].shape[1], ims[0].shape[2],
+                                           ims[0].shape[3]).data.float().cpu()
+        # The path for the samples
+        image_filename = '%s/%s/%d/samples%d.jpg' % (samples_root, experiment_name,
+                                                     folder_number, i)
+        torchvision.utils.save_image(out_ims, image_filename,
+                                     nrow=samples_per_class, normalize=True)
+
+
+# Interp function; expects x0 and x1 to be of shape (shape0, 1, rest_of_shape..)
+def interp(x0, x1, num_midpoints):
+    lerp = torch.linspace(0, 1.0, num_midpoints + 2, device='cuda').to(x0.dtype)
+    return ((x0 * (1 - lerp.view(1, -1, 1))) + (x1 * lerp.view(1, -1, 1)))
+
+
+# Convenience function to sample an index, not actually a 1-hot
+def sample_1hot(batch_size, num_classes, device='cuda'):
+    return torch.randint(low=0, high=num_classes, size=(batch_size,),
+                         device=device, dtype=torch.int64, requires_grad=False)
+
+
+# interp sheet function
+# Supports full, class-wise and intra-class interpolation
+def interp_sheet(G, num_per_sheet, num_midpoints, num_classes, parallel,
+                 samples_root, experiment_name, folder_number, sheet_number=0,
+                 fix_z=False, fix_y=False, device='cuda'):
+    # Prepare zs and ys
+    if fix_z:  # If fix Z, only sample 1 z per row
+        zs = torch.randn(num_per_sheet, 1, G.dim_z, device=device)
+        zs = zs.repeat(1, num_midpoints + 2, 1).view(-1, G.dim_z)
+    else:
+        zs = interp(torch.randn(num_per_sheet, 1, G.dim_z, device=device),
+                    torch.randn(num_per_sheet, 1, G.dim_z, device=device),
+                    num_midpoints).view(-1, G.dim_z)
+    if fix_y:  # If fix y, only sample 1 z per row
+        ys = sample_1hot(num_per_sheet, num_classes)
+        ys = G.shared(ys).view(num_per_sheet, 1, -1)
+        ys = ys.repeat(1, num_midpoints + 2, 1).view(num_per_sheet * (num_midpoints + 2), -1)
+    else:
+        ys = interp(G.shared(sample_1hot(num_per_sheet, num_classes)).view(num_per_sheet, 1, -1),
+                    G.shared(sample_1hot(num_per_sheet, num_classes)).view(num_per_sheet, 1, -1),
+                    num_midpoints).view(num_per_sheet * (num_midpoints + 2), -1)
+    # Run the net--note that we've already passed y through G.shared.
+    if G.fp16:
+        zs = zs.half()
+    with torch.no_grad():
+        if parallel:
+            out_ims = nn.parallel.data_parallel(G, (zs, ys)).data.cpu()
+        else:
+            out_ims = G(zs, ys).data.cpu()
+    interp_style = '' + ('Z' if not fix_z else '') + ('Y' if not fix_y else '')
+    image_filename = '%s/%s/%d/interp%s%d.jpg' % (samples_root, experiment_name,
+                                                  folder_number, interp_style,
+                                                  sheet_number)
+    torchvision.utils.save_image(out_ims, image_filename,
+                                 nrow=num_midpoints + 2, normalize=True)

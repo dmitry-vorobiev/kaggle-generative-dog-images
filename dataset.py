@@ -158,7 +158,7 @@ def is_valid_file(x):
 
 
 class DogsDataSet(datasets.vision.VisionDataset):
-    def __init__(self, root, transforms, target_transform=None, max_samples=None):
+    def __init__(self, root, label_root, transforms, target_transform=None, max_samples=None):
         super().__init__(root, transform=None)
         assert isinstance(transforms, list) and len(transforms) == 3
         self.transforms = transforms
@@ -166,7 +166,7 @@ class DogsDataSet(datasets.vision.VisionDataset):
         self.max_samples = max_samples
         self.classes = {}
 
-        imgs, labels = self._load_subfolders_images(self.root)
+        imgs, labels = self._load_subfolders_images(self.root, label_root)
         assert len(imgs) == len(labels)
         if len(imgs) == 0:
             raise RuntimeError(f'Found 0 files in subfolders of: {self.root}')
@@ -181,7 +181,7 @@ class DogsDataSet(datasets.vision.VisionDataset):
             self.classes[name] = label
         return label
 
-    def _load_subfolders_images(self, root, annot_path):
+    def _load_subfolders_images(self, root, label_root):
         light_zoom, medium_zoom = 0.08, 0.12
         n_pad, n_center, n_top, n_2crops, n_skip, n_dup, n_noop = 0, 0, 0, 0, 0, 0, 0
         imgs, labels, paths = [], [], []
@@ -201,8 +201,8 @@ class DogsDataSet(datasets.vision.VisionDataset):
             img = datasets.folder.default_loader(path)
             annotation_basename = os.path.splitext(os.path.basename(path))[0]
             annotation_dirname = next(
-                dirname for dirname in os.listdir(annot_path) if dirname.startswith(annotation_basename.split('_')[0]))
-            annotation_filename = os.path.join(annot_path, annotation_dirname, annotation_basename)
+                dirname for dirname in os.listdir(label_root) if dirname.startswith(annotation_basename.split('_')[0]))
+            annotation_filename = os.path.join(label_root, annotation_dirname, annotation_basename)
             tree = ET.parse(annotation_filename)
             root = tree.getroot()
             objects = root.findall('object')
@@ -324,10 +324,10 @@ def create_runtime_tfms():
     return [tfm_0, tfm_1, tfm_2]
 
 
-def get_data_loaders(data_root=None, batch_size=32, num_workers=2, shuffle=True,
+def get_data_loaders(data_root=None, label_root=None, batch_size=32, num_workers=2, shuffle=True,
                      pin_memory=True, drop_last=True):
     print('Using dataset root location %s' % data_root)
-    train_set = DogsDataSet(data_root, create_runtime_tfms())
+    train_set = DogsDataSet(data_root, label_root, create_runtime_tfms())
     # Prepare loader; the loaders list is for forward compatibility with
     # using validation / test splits.
     loaders = []

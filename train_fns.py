@@ -1,6 +1,10 @@
+import os
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from utils import toggle_grad, ortho
+import torchvision
+import utils
+from utils import toggle_grad, ortho, save_weights
 
 
 def create_train_fn(G, D, GD, z_, y_, ema, state_dict, config):
@@ -84,3 +88,61 @@ def loss_hinge_dis(dis_fake, dis_real):
 def loss_hinge_gen(dis_fake):
     loss = -torch.mean(dis_fake)
     return loss
+
+
+''' This function takes in the model, saves the weights (multiple copies if 
+    requested), and prepares sample sheets: one consisting of samples given
+    a fixed noise seed (to show how the model evolves throughout training),
+    a set of full conditional sample sheets, and a set of interp sheets. '''
+
+
+def save_and_sample(G, D, G_ema, z_, y_, fixed_z, fixed_y,
+                    state_dict, config, experiment_name):
+    save_weights(G, D, state_dict, config['weights_root'],
+                 experiment_name, None, G_ema if config['ema'] else None)
+    # Save an additional copy to mitigate accidental corruption if process
+    # is killed during a save (it's happened to me before -.-)
+    if config['num_save_copies'] > 0:
+        save_weights(G, D, state_dict, config['weights_root'],
+                     experiment_name,
+                     'copy%d' % state_dict['save_num'],
+                     G_ema if config['ema'] else None)
+        state_dict['save_num'] = (state_dict['save_num'] + 1) % config['num_save_copies']
+
+    # Use EMA G for samples or non-EMA?
+    which_G = G_ema if config['ema'] and config['use_ema'] else G
+
+    # Save a random sample sheet with fixed z and y
+    with torch.no_grad():
+        if config['parallel']:
+            fixed_Gz = nn.parallel.data_parallel(which_G, (fixed_z, which_G.shared(fixed_y)))
+        else:
+            fixed_Gz = which_G(fixed_z, which_G.shared(fixed_y))
+    if not os.path.isdir('%s/%s' % (config['samples_root'], experiment_name)):
+        os.mkdir('%s/%s' % (config['samples_root'], experiment_name))
+    image_filename = '%s/%s/fixed_samples%d.jpg' % (config['samples_root'],
+                                                    experiment_name,
+                                                    state_dict['itr'])
+    torchvision.utils.save_image(fixed_Gz.float().cpu(), image_filename,
+                                 nrow=int(fixed_Gz.shape[0] ** 0.5), normalize=True)
+    # For now, every time we save, also save sample sheets
+    utils.sample_sheet(which_G,
+                       classes_per_sheet=50,
+                       num_classes=config['n_classes'],
+                       samples_per_class=10, parallel=config['parallel'],
+                       samples_root=config['samples_root'],
+                       experiment_name=experiment_name,
+                       folder_number=state_dict['itr'],
+                       z_=z_)
+    # Also save interp sheets
+    for fix_z, fix_y in zip([False, False, True], [False, True, False]):
+        utils.interp_sheet(which_G,
+                           num_per_sheet=16,
+                           num_midpoints=8,
+                           num_classes=config['n_classes'],
+                           parallel=config['parallel'],
+                           samples_root=config['samples_root'],
+                           experiment_name=experiment_name,
+                           folder_number=state_dict['itr'],
+                           sheet_number=0,
+                           fix_z=fix_z, fix_y=fix_y, device='cuda')

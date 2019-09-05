@@ -22,7 +22,6 @@ import dataset
 import BigGAN
 import train_fns
 import utils
-from utils import activation_dict, prepare_z_y, save_and_sample, prepare_parser
 
 
 def run(config):
@@ -33,8 +32,8 @@ def run(config):
     # for the activation specified as a string)
     config['resolution'] = 64
     config['n_classes'] = 120
-    config['G_activation'] = activation_dict[config['G_nl']]
-    config['D_activation'] = activation_dict[config['D_nl']]
+    config['G_activation'] = utils.activation_dict[config['G_nl']]
+    config['D_activation'] = utils.activation_dict[config['D_nl']]
     # By default, skip init if resuming training.
     if config['resume']:
         print('Skipping initialization for training resumption...')
@@ -47,6 +46,10 @@ def run(config):
     utils.prepare_root(config)
     # Setup cudnn.benchmark for free speed
     torch.backends.cudnn.benchmark = True
+
+    experiment_name = (config['experiment_name'] if config['experiment_name']
+                       else 'generative_dog_images')
+    print('Experiment name is %s' % experiment_name)
 
     G = BigGAN.Generator(**config).to(device)
     D = BigGAN.Discriminator(**config).to(device)
@@ -66,7 +69,15 @@ def run(config):
     print('Number of params in G: {} D: {}'.format(
         *[sum([p.data.nelement() for p in net.parameters()]) for net in [G, D]]))
     # Prepare state dict, which holds things like epoch # and itr #
-    state_dict = {'itr': 0, 'epoch': 0, 'config': config}
+    state_dict = {'itr': 0, 'epoch': 0, 'save_num': 0, 'config': config}
+
+    # If loading from a pre-trained model, load weights
+    if config['resume']:
+        print('Loading weights...')
+        utils.load_weights(G, D, state_dict,
+                           config['weights_root'], experiment_name,
+                           config['load_weights'] if config['load_weights'] else None,
+                           G_ema if config['ema'] else None)
 
     # Prepare data; the Discriminator's batch size is all that needs to be passed
     # to the dataloader, as G doesn't require dataloading.
@@ -74,7 +85,7 @@ def run(config):
     # a full D iteration (regardless of number of D steps and accumulations)
     D_batch_size = (config['batch_size'] * config['num_D_steps'] * config['num_D_accumulations'])
     loaders = dataset.get_data_loaders(
-        data_root=INPUT_PATH,
+        data_root=config['data_root'],
         batch_size=D_batch_size,
         num_workers=config['num_workers'],
         shuffle=config['shuffle'],
@@ -85,10 +96,10 @@ def run(config):
     # Prepare noise and randomly sampled label arrays
     # Allow for different batch sizes in G
     G_batch_size = max(config['G_batch_size'], config['batch_size'])
-    z_, y_ = prepare_z_y(
+    z_, y_ = utils.prepare_z_y(
         G_batch_size, G.dim_z, config['n_classes'], device=device, fp16=config['G_fp16'])
     # Prepare a fixed z & y to see individual sample evolution throghout training
-    fixed_z, fixed_y = prepare_z_y(
+    fixed_z, fixed_y = utils.prepare_z_y(
         G_batch_size, G.dim_z, config['n_classes'], device=device, fp16=config['G_fp16'])
     fixed_z.sample_()
     fixed_y.sample_()
@@ -110,10 +121,7 @@ def run(config):
             D.train()
             if config['ema']:
                 G_ema.train()
-            if config['D_fp16']:
-                x, y = x.to(device).half(), y.to(device)
-            else:
-                x, y = x.to(device), y.to(device)
+            x, y = x.to(device), y.to(device)
             metrics = train(x, y)
 
             if not (state_dict['itr'] % config['log_interval']):
@@ -130,13 +138,16 @@ def run(config):
             # Save weights and copies as configured at specified interval
             if not (state_dict['itr'] % config['save_every']):
                 if config['G_eval_mode']:
-                    print('Switchin G to eval mode...')
+                    print('Switching G to eval mode...')
                     G.eval()
                     # if config['ema']:
                     # G_ema.eval()
-                save_and_sample(G, G_ema, fixed_z, fixed_y, config)
+                train_fns.save_and_sample(G, D, G_ema, z_, y_, fixed_z, fixed_y,
+                                          state_dict, config, experiment_name)
 
             if config['stop_after'] > 0 and int(time.perf_counter() - start_time) > config['stop_after']:
+                utils.save_weights(G, D, state_dict, config['weights_root'],
+                                   experiment_name, None, G_ema if config['ema'] else None)
                 print("Time limit reached! Stopping training!")
                 return
 
@@ -146,7 +157,7 @@ def run(config):
 
 def main():
     # parse command line and run
-    parser = prepare_parser()
+    parser = utils.prepare_parser()
     config = vars(parser.parse_args())
     print(config)
     run(config)
