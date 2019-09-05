@@ -187,10 +187,6 @@ class Generator(nn.Module):
                                 betas=(self.B1, self.B2), weight_decay=0,
                                 eps=self.adam_eps)
 
-        # LR scheduling, left here for forward compatibility
-        # self.lr_sched = {'itr' : 0}# if self.progressive else {}
-        # self.j = 0
-
     # Initialize
     def init_weights(self):
         self.param_count = 0
@@ -348,9 +344,6 @@ class Discriminator(nn.Module):
         self.lr, self.B1, self.B2, self.adam_eps = D_lr, D_B1, D_B2, adam_eps
         self.optim = optim.Adam(params=self.parameters(), lr=self.lr,
                                 betas=(self.B1, self.B2), weight_decay=0, eps=self.adam_eps)
-        # LR scheduling, left here for forward compatibility
-        # self.lr_sched = {'itr' : 0}# if self.progressive else {}
-        # self.j = 0
 
     # Initialize
     def init_weights(self):

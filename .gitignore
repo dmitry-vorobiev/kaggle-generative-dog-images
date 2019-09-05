@@ -105,3 +105,9 @@ venv.bak/
 
 *.iml
 .idea/*
+
+data/*
+labels/*
+logs/*
+samples/*
+weights/*

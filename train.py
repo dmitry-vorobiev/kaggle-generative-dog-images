@@ -7,17 +7,7 @@
 """
 import datetime
 import time
-
-import numpy as np
-
 import torch
-import torch.nn as nn
-from torch.nn import init
-import torch.optim as optim
-import torch.nn.functional as F
-from torch.nn import Parameter as P
-import torchvision
-
 import dataset
 import BigGAN
 import train_fns
@@ -86,6 +76,7 @@ def run(config):
     D_batch_size = (config['batch_size'] * config['num_D_steps'] * config['num_D_accumulations'])
     loaders = dataset.get_data_loaders(
         data_root=config['data_root'],
+        label_root=config['label_root'],
         batch_size=D_batch_size,
         num_workers=config['num_workers'],
         shuffle=config['shuffle'],
@@ -144,12 +135,6 @@ def run(config):
                     # G_ema.eval()
                 train_fns.save_and_sample(G, D, G_ema, z_, y_, fixed_z, fixed_y,
                                           state_dict, config, experiment_name)
-
-            if config['stop_after'] > 0 and int(time.perf_counter() - start_time) > config['stop_after']:
-                utils.save_weights(G, D, state_dict, config['weights_root'],
-                                   experiment_name, None, G_ema if config['ema'] else None)
-                print("Time limit reached! Stopping training!")
-                return
 
         # Increment epoch counter at end of epoch
         state_dict['epoch'] += 1

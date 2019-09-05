@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torchvision
@@ -340,6 +339,10 @@ def prepare_parser():
     parser.add_argument(
         '--sv_log_interval', type=int, default=10,
         help='Iteration interval for logging singular values '
+             ' (default: %(default)s)')
+    parser.add_argument(
+        '--log_interval', type=int, default=100,
+        help='Iteration interval for general logs '
              ' (default: %(default)s)')
 
     return parser
