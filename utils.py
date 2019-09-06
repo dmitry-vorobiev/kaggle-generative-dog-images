@@ -351,39 +351,13 @@ def prepare_parser():
 # Arguments for sample.py; not presently used in train.py
 def add_sample_parser(parser):
     parser.add_argument(
-        '--sample_npz', action='store_true', default=False,
-        help='Sample "sample_num_npz" images and save to npz? '
+        '--sample_num', type=int, default=10000,
+        help='Number of images to sample'
              '(default: %(default)s)')
     parser.add_argument(
-        '--sample_num_npz', type=int, default=50000,
-        help='Number of images to sample when sampling NPZs '
+        '--trunc_z', type=float, default=0.0,
+        help='Truncate noise vector to this value'
              '(default: %(default)s)')
-    parser.add_argument(
-        '--sample_sheets', action='store_true', default=False,
-        help='Produce class-conditional sample sheets and stick them in '
-             'the samples root? (default: %(default)s)')
-    parser.add_argument(
-        '--sample_interps', action='store_true', default=False,
-        help='Produce interpolation sheets and stick them in '
-             'the samples root? (default: %(default)s)')
-    parser.add_argument(
-        '--sample_sheet_folder_num', type=int, default=-1,
-        help='Number to use for the folder for these sample sheets '
-             '(default: %(default)s)')
-    parser.add_argument(
-        '--sample_random', action='store_true', default=False,
-        help='Produce a single random sheet? (default: %(default)s)')
-    parser.add_argument(
-        '--sample_trunc_curves', type=str, default='',
-        help='Get inception metrics with a range of variances?'
-             'To use this, specify a startpoint, step, and endpoint, e.g. '
-             '--sample_trunc_curves 0.2_0.1_1.0 for a startpoint of 0.2, '
-             'endpoint of 1.0, and stepsize of 1.0.  Note that this is '
-             'not exactly identical to using tf.truncated_normal, but should '
-             'have approximately the same effect. (default: %(default)s)')
-    parser.add_argument(
-        '--sample_inception_metrics', action='store_true', default=False,
-        help='Calculate Inception metrics with sample.py? (default: %(default)s)')
     return parser
 
 
