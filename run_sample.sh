@@ -1,5 +1,7 @@
 #!/bin/bash
 python sample.py \
+--data_root ./input/all-dogs \
+--label_root ./input/annotation/Annotation \
 --num_epochs 60 --shuffle --num_workers 2 --batch_size 32 \
 --num_D_steps 1 --G_lr 1e-4 --D_lr 4e-4 --D_B2 0.999 --G_B2 0.999 \
 --G_ch 32 --D_ch 64 \
