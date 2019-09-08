@@ -30,6 +30,9 @@ To start training a new model execute *run_train.sh*. You may want to edit it fi
 # Generating images
 Execute *run_sample.sh*. To set the number of images to be generated change *--sample_num* parameter. Generated images will be stored in the *--samples_root* directory (*./samples* by default). Zip archive with generated images will be saved in the script root directory.
 
+# Pretrained model weights
+You can download it from [this Kaggle's dataset](https://www.kaggle.com/dvorobiev/generative-dog-images-biggan-weigths) (Kaggle's account required). Typically the script expects weights to be in *./weights/generative_dog_images* directory, but you can change this behavior by setting *--weights_root* and *--experiment_name* parameters.
+
 # Misc
 ```
 @inproceedings{
