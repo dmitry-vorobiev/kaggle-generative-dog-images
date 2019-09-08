@@ -20,7 +20,7 @@ Kaggle's kernel environment with GPU support was used to develop and run this so
 - NVIDIA drivers 418.67
 
 # Configuration
-The description of available settings can be found in the beginning of *utils.py*. Some of them (like parallel execution or half/mixed precision won't work, because required functionality was partially removed).
+The description of available settings can be found in the beginning of *utils.py*. Some of them (like parallel execution or half/mixed precision) won't work, because the required functionality was partially removed.
 
 To change path to model inputs *--data_root* and *--label_root* parameters should be set to appropriate locations.
 
