@@ -1,12 +1,10 @@
 # kaggle-generative-dog-images
 5th place solution for Kaggle's Generative Dog Images competition.
 
-Kaggle's forum summary post:
-https://www.kaggle.com/c/generative-dog-images/discussion/104287
+[Kaggle's forum summary post](https://www.kaggle.com/c/generative-dog-images/discussion/104287)
 
 # Description
-This solution is based on PyTorch BigGAN implementation by Andy Brock. Some of the original modules were replaced or removed. In case you want to use this model to solve other problems, please, start with the original repo:
-https://github.com/ajbrock/BigGAN-PyTorch
+This solution is based on PyTorch BigGAN implementation by Andy Brock. Some of the original modules were replaced or removed. In case you want to use this model to solve other problems, please, start with the [original repo](https://github.com/ajbrock/BigGAN-PyTorch).
 
 # Hardware
 Kaggle's kernel environment with GPU support was used to develop and run this solution. Approximate specs are listed bellow:
@@ -31,3 +29,15 @@ To start training a new model execute *run_train.sh*. You may want to edit it fi
 
 # Generating images
 Execute *run_sample.sh*. To set the number of images to be generated change *--sample_num* parameter. Generated images will be stored in the *--samples_root* directory (*./samples* by default). Zip archive with generated images will be saved in the script root directory.
+
+# Misc
+```
+@inproceedings{
+brock2018large,
+title={Large Scale {GAN} Training for High Fidelity Natural Image Synthesis},
+author={Andrew Brock and Jeff Donahue and Karen Simonyan},
+booktitle={International Conference on Learning Representations},
+year={2019},
+url={https://openreview.net/forum?id=B1xsqj09Fm},
+}
+```
