@@ -14,4 +14,4 @@ python train.py \
 --G_init ortho --D_init ortho \
 --G_eval_mode \
 --ema --use_ema --ema_start 30000 \
---save_every 2000 --num_save_copies 2 --seed 1234
+--save_every 5000 --num_save_copies 0 --seed 1234
